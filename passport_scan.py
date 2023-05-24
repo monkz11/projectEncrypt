@@ -17,7 +17,7 @@ def rescaleFrame(frame, scale=0.75):
 # this part of the code requires an argument of the form --image to be passed in the command line
 # the image is then passed in the variable args
 
-# cv2(Opencv command reads the image path and returns the image as a numpy array)
+# cv2(Opencv command reads the image path and returns the image as a numpy array
 image = cv2.imread("Passports/passport_01.png")
 image = rescaleFrame(image, 0.2)
 # Opencv command converts image from its corrent format to grayscale(easier to read)
