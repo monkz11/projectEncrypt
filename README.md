@@ -1,3 +1,3 @@
 # projectEncrypt
-Project to create a private ZKP human verification wallet
-Contributers @monkz11, @jikaelgagnon, testing vs code commit, testing push and pull requests from vs code, trying to pull request, attempt 2
+Project to create a private ZKP human verification wallet with the purpose of centralising and privatising the verification process
+Contributers @monkz11, @jikaelgagnon
