@@ -17,6 +17,8 @@ def rescaleFrame(frame, scale=0.75):
 # this part of the code requires an argument of the form --image to be passed in the command line
 # the image is then passed in the variable args
 
+
+
 # cv2(Opencv command reads the image path and returns the image as a numpy array
 image = cv2.imread("Passports/passport_01.png")
 image = rescaleFrame(image, 0.2)
@@ -62,5 +64,66 @@ gradient = np.absolute(gradient) #Get absolute value of matrix (since some value
 gradient = (gradient - minVal) / (maxVal - minVal) # Scale elements in matrix using (pixel - min) / (max - min). Forces values into [0,1]
 gradient = (gradient * 255).astype("uint8") # Multiply by 255, placing values into [0,255]
 cv2.imshow("Gradient", gradient) # Display image
+
+# apply a closing operation using the rectangular kernel to close
+# gaps in between letters -- then apply Otsu's thresholding method
+# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 2 rectangles
+gradient = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, rectKernel)
+threshold = cv2.threshold(gradient, 0, 255,
+	cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+cv2.imshow("Rect Close", threshold)
+
+# perform another closing operation, this time using the square
+# kernel to close gaps between lines of the MRZ, then perform a
+# series of erosions to break apart connected components
+# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 1 rectangle
+threshold = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, sqKernel)
+threshold = cv2.erode(threshold, None, iterations=2)
+cv2.imshow("Square Close", threshold)
+
+# find contours in the thresholded image and sort them from bottom
+# to top (since the MRZ will always be at the bottom of the passport)
+contours = cv2.findContours(threshold.copy(), cv2.RETR_EXTERNAL,
+	cv2.CHAIN_APPROX_SIMPLE)
+contours = imutils.grab_contours(contours)
+contours = sort_contours(contours, method="bottom-to-top")[0]
+# initialize the bounding box associated with the MRZ
+mrzBox = None
+
+# loop over the contours
+for c in contours:
+	# compute the bounding box of the contour and then derive the
+	# how much of the image the bounding box occupies in terms of
+	# both width and height
+	(x, y, w, h) = cv2.boundingRect(c)
+	percentWidth = w / float(W)
+	percentHeight = h / float(H)
+	# if the bounding box occupies > 80% width and > 4% height of the
+	# image, then assume we have found the MRZ
+	if percentWidth > 0.8 and percentHeight > 0.04:
+		mrzBox = (x, y, w, h)
+		break
+
+# if the MRZ was not found, exit the script
+if mrzBox is None:
+	print("[INFO] MRZ could not be found")
+	sys.exit(0)
+# pad the bounding box since we applied erosions and now need to
+# re-grow it
+(x, y, w, h) = mrzBox
+pX = int((x + w) * 0.03)
+pY = int((y + h) * 0.03)
+(x, y) = (x - pX, y - pY)
+(w, h) = (w + (pX * 2), h + (pY * 2))
+# extract the padded MRZ from the image
+mrz = image[y:y + h, x:x + w]
+
+# OCR the MRZ region of interest using Tesseract, removing any
+# occurrences of spaces
+mrzText = pytesseract.image_to_string(mrz)
+mrzText = mrzText.replace(" ", "")
+print(mrzText)
+# show the MRZ image
+cv2.imshow("MRZ", mrz)
 
 cv2.waitKey(0)
