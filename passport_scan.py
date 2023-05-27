@@ -6,6 +6,9 @@ import imutils
 import sys
 import cv2
 
+# Uncomment for jicky to make tesseract work
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
+
 #Rescales image, video, and live video
 def rescaleFrame(frame, scale=0.75):
     height = int (frame.shape[0] * scale) #scales height
@@ -14,116 +17,104 @@ def rescaleFrame(frame, scale=0.75):
 
     return cv2.resize(frame, dimensions, interpolation=cv2.INTER_AREA)
 
-# this part of the code requires an argument of the form --image to be passed in the command line
-# the image is then passed in the variable args
 
+def getMRZ(image, windowName):
+	image = rescaleFrame(image, 0.2) #doesnt work without rescale for some reason
+	# Opencv command converts image from its corrent format to grayscale(easier to read)
+	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+	# finds the height and width of the image in (if I understand the documentation properly pixels e.g. example H=2956, W=2006)
+	(H, W) = gray.shape
 
+	#Ref for next few lines: https://pyimagesearch.com/2021/04/28/opencv-morphological-operations/
+	# morph rect specifies the size of the moprhing image, and getstructingelements specifies the pixels around the central element
+	rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 7))
+	sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
 
-# cv2(Opencv command reads the image path and returns the image as a numpy array
-image = cv2.imread("Passports/passport_01.png")
-image = rescaleFrame(image, 0.2)
-# Opencv command converts image from its corrent format to grayscale(easier to read)
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-# finds the height and width of the image in (if I understand the documentation properly pixels e.g. example H=2956, W=2006)
-(H, W) = gray.shape
+	# gausian blur reduces the high freuqncy components
+	gray = cv2.GaussianBlur(gray, (3, 3), 0)
+	# blackhat operation finds dark regions on a light background
+	blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKernel)
+	cv2.imshow(windowName, image)
+	# cv2.imshow("Blackhat", blackhat)
 
-#Ref for next few lines: https://pyimagesearch.com/2021/04/28/opencv-morphological-operations/
-# morph rect specifies the size of the moprhing image, and getstructingelements specifies the pixels around the central element
-rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 7))
-sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
+	# Ref: https://pyimagesearch.com/2021/05/12/image-gradients-with-opencv-sobel-and-scharr/
+	# compute the Scharr gradient of the blackhat image and scale the
+	# result into the range [0, 255]
 
-# gausian blur reduces the high freuqncy components
-gray = cv2.GaussianBlur(gray, (3, 3), 0)
-# blackhat operation finds dark regions on a light background
-blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKernel)
-cv2.imshow("Original", image)
-cv2.imshow("Blackhat", blackhat)
+	gradient = cv2.Sobel(blackhat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1) #compute Scharr edge approx
+	gradient = np.absolute(gradient) #Get absolute value of matrix (since some values may be negative)
+	(minVal, maxVal) = (np.min(gradient), np.max(gradient)) #returns min and max of gradient array
 
-# Ref: https://pyimagesearch.com/2021/05/12/image-gradients-with-opencv-sobel-and-scharr/
-# Now we use Scharr operator which allows for edge detection in the image. 
-# Scharr and Sobel edge detection rely on gradient approximations to detect edges; what is a gradient?
+	# Each pixel value must fall in [0,255], so we must rescale after computing gradient. We do this using the min/max scaling method.
+	gradient = (gradient - minVal) / (maxVal - minVal) # Scale elements in matrix using (pixel - min) / (max - min). Forces values into [0,1]
+	gradient = (gradient * 255).astype("uint8") # Multiply by 255, placing values into [0,255]
+	# cv2.imshow("Gradient", gradient) # Display image
 
-# Gradient
-# Just like any other image convolution, we have a kernel which surrounds a pixel in a defined neighbourhood. For simplicity, assume it's 3x3.
-# We inspect the North, South, East, and West pixels relative to our starting pixel. If our starting pixel is I(x,y), these pixels are 
-# I(x,y+1), I(x,y-1), I(x+1,y), I(x-1,y)
-# We first compute the components in the vertical (G_y) and horizontal (G_x) directions by subtracting the values stored at each of these pixels.
-# Ex: G_y = I(x,y+1) - I(x,y-1)
-# Then, using pythagorean theorem we can compute the angle and magnitude of the gradient formed by these components.
+	# apply a closing operation using the rectangular kernel to close
+	# gaps in between letters -- then apply Otsu's thresholding method
+	# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 2 rectangles
+	gradient = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, rectKernel)
+	threshold = cv2.threshold(gradient, 0, 255,
+		cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+	# cv2.imshow("Rect Close", threshold)
 
-# Sobel and Scharr methods approximate the gradient quickly using kernels, where Scharr may provide slightly more accuracy.
+	# perform another closing operation, this time using the square
+	# kernel to close gaps between lines of the MRZ, then perform a
+	# series of erosions to break apart connected components
+	# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 1 rectangle
+	threshold = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, sqKernel)
+	threshold = cv2.erode(threshold, None, iterations=2)
+	# cv2.imshow("Square Close", threshold)
 
-# compute the Scharr gradient of the blackhat image and scale the
-# result into the range [0, 255]
+	# find contours in the thresholded image and sort them from bottom
+	# to top (since the MRZ will always be at the bottom of the passport)
+	contours = cv2.findContours(threshold.copy(), cv2.RETR_EXTERNAL,
+		cv2.CHAIN_APPROX_SIMPLE)
+	contours = imutils.grab_contours(contours)
+	contours = sort_contours(contours, method="bottom-to-top")[0]
+	# initialize the bounding box associated with the MRZ
+	mrzBox = None
 
-gradient = cv2.Sobel(blackhat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1) #compute Scharr edge approx
-gradient = np.absolute(gradient) #Get absolute value of matrix (since some values may be negative)
-(minVal, maxVal) = (np.min(gradient), np.max(gradient)) #returns min and max of gradient array
+	# loop over the contours
+	for c in contours:
+		# compute the bounding box of the contour and then derive the
+		# how much of the image the bounding box occupies in terms of
+		# both width and height
+		(x, y, w, h) = cv2.boundingRect(c)
+		percentWidth = w / float(W)
+		percentHeight = h / float(H)
+		# if the bounding box occupies > 80% width and > 4% height of the
+		# image, then assume we have found the MRZ
+		if percentWidth > 0.8 and percentHeight > 0.04:
+			mrzBox = (x, y, w, h)
+			break
 
-# Each pixel value must fall in [0,255], so we must rescale after computing gradient. We do this using the min/max scaling method.
-gradient = (gradient - minVal) / (maxVal - minVal) # Scale elements in matrix using (pixel - min) / (max - min). Forces values into [0,1]
-gradient = (gradient * 255).astype("uint8") # Multiply by 255, placing values into [0,255]
-cv2.imshow("Gradient", gradient) # Display image
+	# if the MRZ was not found, exit the script
+	if mrzBox is None:
+		print("[INFO] MRZ could not be found")
+		sys.exit(0)
+	# pad the bounding box since we applied erosions and now need to
+	# re-grow it
+	(x, y, w, h) = mrzBox
+	pX = int((x + w) * 0.03)
+	pY = int((y + h) * 0.03)
+	(x, y) = (x - pX, y - pY)
+	(w, h) = (w + (pX * 2), h + (pY * 2))
+	# extract the padded MRZ from the image
+	mrz = image[y:y + h, x:x + w]
+	return mrz
 
-# apply a closing operation using the rectangular kernel to close
-# gaps in between letters -- then apply Otsu's thresholding method
-# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 2 rectangles
-gradient = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, rectKernel)
-threshold = cv2.threshold(gradient, 0, 255,
-	cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-cv2.imshow("Rect Close", threshold)
+def getMRZText(mrz):
+	# OCR the MRZ region of interest using Tesseract, removing any
+	# occurrences of spaces
+	mrzText = pytesseract.image_to_string(mrz)
+	mrzText = mrzText.replace(" ", "")
+	return mrzText
 
-# perform another closing operation, this time using the square
-# kernel to close gaps between lines of the MRZ, then perform a
-# series of erosions to break apart connected components
-# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 1 rectangle
-threshold = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, sqKernel)
-threshold = cv2.erode(threshold, None, iterations=2)
-cv2.imshow("Square Close", threshold)
-
-# find contours in the thresholded image and sort them from bottom
-# to top (since the MRZ will always be at the bottom of the passport)
-contours = cv2.findContours(threshold.copy(), cv2.RETR_EXTERNAL,
-	cv2.CHAIN_APPROX_SIMPLE)
-contours = imutils.grab_contours(contours)
-contours = sort_contours(contours, method="bottom-to-top")[0]
-# initialize the bounding box associated with the MRZ
-mrzBox = None
-
-# loop over the contours
-for c in contours:
-	# compute the bounding box of the contour and then derive the
-	# how much of the image the bounding box occupies in terms of
-	# both width and height
-	(x, y, w, h) = cv2.boundingRect(c)
-	percentWidth = w / float(W)
-	percentHeight = h / float(H)
-	# if the bounding box occupies > 80% width and > 4% height of the
-	# image, then assume we have found the MRZ
-	if percentWidth > 0.8 and percentHeight > 0.04:
-		mrzBox = (x, y, w, h)
-		break
-
-# if the MRZ was not found, exit the script
-if mrzBox is None:
-	print("[INFO] MRZ could not be found")
-	sys.exit(0)
-# pad the bounding box since we applied erosions and now need to
-# re-grow it
-(x, y, w, h) = mrzBox
-pX = int((x + w) * 0.03)
-pY = int((y + h) * 0.03)
-(x, y) = (x - pX, y - pY)
-(w, h) = (w + (pX * 2), h + (pY * 2))
-# extract the padded MRZ from the image
-mrz = image[y:y + h, x:x + w]
-
-# OCR the MRZ region of interest using Tesseract, removing any
-# occurrences of spaces
-mrzText = pytesseract.image_to_string(mrz)
-mrzText = mrzText.replace(" ", "")
-print(mrzText)
-# show the MRZ image
+image = cv2.imread("./Passports/passport_01.png")
+mrz = getMRZ(image, "mrz")
 cv2.imshow("MRZ", mrz)
+text = getMRZText(mrz)
+print(text)
 
 cv2.waitKey(0)
