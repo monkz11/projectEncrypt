@@ -5,9 +5,10 @@ import argparse
 import imutils
 import sys
 import cv2
+import os
 
 # Uncomment for jicky to make tesseract work
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
 
 #Rescales image, video, and live video
 def rescaleFrame(frame, scale=0.75):
@@ -18,8 +19,10 @@ def rescaleFrame(frame, scale=0.75):
     return cv2.resize(frame, dimensions, interpolation=cv2.INTER_AREA)
 
 
-def getMRZ(image, windowName):
-	image = rescaleFrame(image, 0.2) #doesnt work without rescale for some reason
+def getMRZ(image):
+	# 600 is an arbitrary width I'm testing
+	scale = 600 / image.shape[1]
+	image = rescaleFrame(image, scale)
 	# Opencv command converts image from its corrent format to grayscale(easier to read)
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	# finds the height and width of the image in (if I understand the documentation properly pixels e.g. example H=2956, W=2006)
@@ -34,7 +37,6 @@ def getMRZ(image, windowName):
 	gray = cv2.GaussianBlur(gray, (3, 3), 0)
 	# blackhat operation finds dark regions on a light background
 	blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKernel)
-	cv2.imshow(windowName, image)
 	# cv2.imshow("Blackhat", blackhat)
 
 	# Ref: https://pyimagesearch.com/2021/05/12/image-gradients-with-opencv-sobel-and-scharr/
@@ -91,8 +93,7 @@ def getMRZ(image, windowName):
 
 	# if the MRZ was not found, exit the script
 	if mrzBox is None:
-		print("[INFO] MRZ could not be found")
-		sys.exit(0)
+		return None
 	# pad the bounding box since we applied erosions and now need to
 	# re-grow it
 	(x, y, w, h) = mrzBox
@@ -111,10 +112,33 @@ def getMRZText(mrz):
 	mrzText = mrzText.replace(" ", "")
 	return mrzText
 
-image = cv2.imread("./Passports/passport_01.png")
-mrz = getMRZ(image, "mrz")
-cv2.imshow("MRZ", mrz)
-text = getMRZText(mrz)
-print(text)
 
-cv2.waitKey(0)
+def getAllScans(directory):
+
+	scans = dict()
+
+	for filename in os.listdir(directory):
+		path = os.path.join(directory, filename)
+		image = cv2.imread(path)
+		mrz = getMRZ(image)
+		mrzText = getMRZText(mrz)
+		scans[mrzText] = mrz
+
+	return scans
+
+
+def showScans(scans):
+	print("------------ Beginning Scan")
+	scanNum = 1
+	for mrz in scans.keys():
+		print(f"------------ Showing scan #{str(scanNum)}")
+		print(mrz)
+		cv2.imshow(mrz, scans[mrz])
+		print("------------ Press any key to see next scan")
+		cv2.waitKey(0)
+		scanNum += 1
+
+	print("------------ All scans have been displayed")
+	
+
+showScans(getAllScans("./Passports"))
