@@ -8,7 +8,7 @@ import cv2
 import os
 
 # Uncomment for jicky to make tesseract work
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
+#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
 
 #Rescales image, video, and live video
 def rescaleFrame(frame, scale=0.75):
@@ -58,7 +58,7 @@ def getMRZ(image):
 	gradient = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, rectKernel)
 	threshold = cv2.threshold(gradient, 0, 255,
 		cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-	# cv2.imshow("Rect Close", threshold)
+	#cv2.imshow("Rect Close", threshold)
 
 	# perform another closing operation, this time using the square
 	# kernel to close gaps between lines of the MRZ, then perform a
@@ -66,7 +66,7 @@ def getMRZ(image):
 	# this code closes the regions of the passport image into rectangles, higlighting the MRZ into 1 rectangle
 	threshold = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, sqKernel)
 	threshold = cv2.erode(threshold, None, iterations=2)
-	# cv2.imshow("Square Close", threshold)
+	#cv2.imshow("Square Close", threshold)
 
 	# find contours in the thresholded image and sort them from bottom
 	# to top (since the MRZ will always be at the bottom of the passport)
@@ -75,7 +75,7 @@ def getMRZ(image):
 	contours = imutils.grab_contours(contours)
 	contours = sort_contours(contours, method="bottom-to-top")[0]
 	# initialize the bounding box associated with the MRZ
-	mrzBox = None
+	contourMatch = []
 
 	# loop over the contours
 	for c in contours:
@@ -85,25 +85,30 @@ def getMRZ(image):
 		(x, y, w, h) = cv2.boundingRect(c)
 		percentWidth = w / float(W)
 		percentHeight = h / float(H)
-		# if the bounding box occupies > 80% width and > 4% height of the
+		# if the bounding box occupies > 70% width and > 2% height of the
 		# image, then assume we have found the MRZ
-		if percentWidth > 0.8 and percentHeight > 0.04:
-			mrzBox = (x, y, w, h)
-			break
+		if percentWidth > 0.7 and percentHeight > 0.02:
+			contourMatch.append((x, y, w, h))
 
 	# if the MRZ was not found, exit the script
-	if mrzBox is None:
+	if contourMatch == []:
 		return None
 	# pad the bounding box since we applied erosions and now need to
 	# re-grow it
-	(x, y, w, h) = mrzBox
-	pX = int((x + w) * 0.03)
-	pY = int((y + h) * 0.03)
-	(x, y) = (x - pX, y - pY)
-	(w, h) = (w + (pX * 2), h + (pY * 2))
-	# extract the padded MRZ from the image
-	mrz = image[y:y + h, x:x + w]
-	return mrz
+	for matches in contourMatch:
+		(x, y, w, h) = matches
+		pX = int((x + w) * 0.03)
+		pY = int((y + h) * 0.03)
+		(x, y) = (x - pX, y - pY)
+		(w, h) = (w + (pX * 2), h + (pY * 2))
+		# extract the padded MRZ from the image
+		mrz = image[y:y + h, x:x + w]
+		mrzWord = getMRZText(mrz)
+		# if the first word in out extracted text is P then we know its the right one
+		if mrzWord[0] == 'P':
+			return mrzWord
+	
+	return None
 
 def getMRZText(mrz):
 	# OCR the MRZ region of interest using Tesseract, removing any
@@ -115,14 +120,14 @@ def getMRZText(mrz):
 
 def getAllScans(directory):
 
-	scans = dict()
-
+	scans = []
 	for filename in os.listdir(directory):
 		path = os.path.join(directory, filename)
 		image = cv2.imread(path)
 		mrz = getMRZ(image)
-		mrzText = getMRZText(mrz)
-		scans[mrzText] = mrz
+		#print(mrz)
+		#mrzText = getMRZText(mrz)
+		scans.append(mrz)
 
 	return scans
 
@@ -130,12 +135,12 @@ def getAllScans(directory):
 def showScans(scans):
 	print("------------ Beginning Scan")
 	scanNum = 1
-	for mrz in scans.keys():
+	for mrz in scans:
 		print(f"------------ Showing scan #{str(scanNum)}")
 		print(mrz)
-		cv2.imshow(mrz, scans[mrz])
-		print("------------ Press any key to see next scan")
-		cv2.waitKey(0)
+		#cv2.imshow(mrz, scans[mrz])
+		input("------------ Press any key to see next scan")
+		# cv2.waitKey(0)
 		scanNum += 1
 
 	print("------------ All scans have been displayed")
