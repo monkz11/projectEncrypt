@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block content %}
+    <!-- The syntax below is a language called Jinja, which allows us to format the page depending on what is
+    returned by our python functions. 
+    Note that our upload_passport function in routes.py receives an argument called complete_scan if successful.
+    The Jinja code says "if a picture is uploaded, show it, otherwise show 'Image will be rendered here'"-->
+    {% if complete_scan %}
+    <h1>MRZ Detected!</h1>
+    <img src="{{complete_scan}}">
+    {% else %}
+    <h1>Upload a scan of your passport</h1>
+    {% endif %}
+        <!-- action defines where the form sends the data. in this case it sends it to the function
+        in routes.py called "upload_passport" -->
+    <form action="{{ url_for('upload_passport') }}" enctype="multipart/form-data" method="POST">
+        <input name="passport_img" type="file"/>
+        <label></label>
+        <input type="submit" />
+    </form>
+{% endblock content %}

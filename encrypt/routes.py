@@ -10,7 +10,13 @@ from encrypt.passport_scan import drawMRZRectangle
 # With Flask, we must define a function that runs on each page of the website. The function determines the content
 # displayed on the page.
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
+@app.route('/home')
+def home():
+    return render_template('home.html')
+
+
+@app.route('/upload', methods=['GET', 'POST'])
 def upload_passport():
     # Checks if we tried to upload something
     if request.method == 'POST':
@@ -24,6 +30,6 @@ def upload_passport():
         scan = drawMRZRectangle(cv2.imread(upload_path))
         cv2.imwrite(scan_path, scan)
         # Displays uploaded image on the page
-        return render_template('image_render.html', complete_scan=os.path.join('static/scans', filename))
+        return render_template('upload.html', title = "Upload", complete_scan=os.path.join('static/scans', filename))
     # If nothing uploaded, render html without image
-    return render_template('image_render.html')
+    return render_template('upload.html')
