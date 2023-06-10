@@ -8,7 +8,7 @@ import cv2
 import os
 
 # Uncomment for jicky to make tesseract work
-#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
 
 #Rescales image, video, and live video
 def rescaleFrame(frame, scale=0.75):
@@ -19,7 +19,7 @@ def rescaleFrame(frame, scale=0.75):
     return cv2.resize(frame, dimensions, interpolation=cv2.INTER_AREA)
 
 
-def getMRZ(image):
+def getMRZCoords(image):
 	# 600 is an arbitrary width I'm testing
 	scale = 600 / image.shape[1]
 	image = rescaleFrame(image, scale)
@@ -106,7 +106,8 @@ def getMRZ(image):
 		mrzWord = getMRZText(mrz)
 		# if the first word in out extracted text is P then we know its the right one
 		if mrzWord[0] == 'P':
-			return mrzWord
+			return (x,y,w,h)
+			# return mrzWord
 	
 	return None
 
@@ -124,10 +125,14 @@ def getAllScans(directory):
 	for filename in os.listdir(directory):
 		path = os.path.join(directory, filename)
 		image = cv2.imread(path)
-		mrz = getMRZ(image)
+		mrz_coords = getMRZCoords(image)
+		if (mrz_coords == None): continue
+		(x,y,w,h) = mrz_coords
+		mrz = image[y:y + h, x:x + w]
+		mrz_text = getMRZText(mrz)
 		#print(mrz)
 		#mrzText = getMRZText(mrz)
-		scans.append(mrz)
+		scans.append(mrz_text)
 
 	return scans
 
@@ -144,6 +149,8 @@ def showScans(scans):
 		scanNum += 1
 
 	print("------------ All scans have been displayed")
-	
 
-showScans(getAllScans("./Passports"))
+def drawMRZRectangle(image):
+	x,y,w,h = getMRZCoords(image)
+	return cv2.rectangle(image, (x,y),(x+w, y+h),(0,255,0),2)
+
