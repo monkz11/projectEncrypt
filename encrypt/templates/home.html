@@ -1,4 +1,13 @@
 {% extends "layout.html" %}
 {% block content %}
-
+<h1>About the Project</h1>
+<p>projectEncrypt is an open source identity verification app that allows users to prove their identitiy using a government issued ID.
+  IDs are used for verification, but none of the information is stored. The only information stored for a user is their username, password, and 
+  email/phone number. The project was created to combat bot accounts by providing a safe way to prove human identitiy.
+</p>
+<img src="{{url_for('static', filename='Images/scanned_passport.png')}}" alt="Image of scanned passport">
+<p>The backend for the project is written entirely in Python. The app can detect machine readable zones (MRZs) on passports through the use of computer vision
+  and optical character recognition. Uploaded images are passed through several stages of preprocessing through Intel's OpenCV library to identify the MRZ,
+  then Google's Tesseract OCR is used to extract the text.  
+</p>
 {% endblock content %}
