@@ -4,17 +4,29 @@
     returned by our python functions. 
     Note that our upload_passport function in routes.py receives an argument called complete_scan if successful.
     The Jinja code says "if a picture is uploaded, show it, otherwise show 'Image will be rendered here'"-->
-    {% if complete_scan %}
-    <h1>MRZ Detected!</h1>
-    <img src="{{complete_scan}}">
-    {% else %}
+    
     <h1>Upload a scan of your passport</h1>
-    {% endif %}
-        <!-- action defines where the form sends the data. in this case it sends it to the function
-        in routes.py called "upload_passport" -->
+    <!-- action defines where the form sends the data. in this case it sends it to the function
+    in routes.py called "upload_passport" -->
     <form action="{{ url_for('upload_passport') }}" enctype="multipart/form-data" method="POST">
-        <input name="passport_img" type="file"/>
-        <label></label>
-        <input type="submit" />
+        <div class="mb-3">
+            <small class="form-text text-muted">None of the data you upload will be stored.</small>
+            <input class="form-control" name="passport_img" type="file" id="formFile">
+        </div>
+        <button name="submit-button" value="img" type="submit" class="btn btn-primary mb-2">Upload</button>
     </form>
+    {% if success_status == 0 %}
+    <h1><span class="badge badge badge-success">MRZ Detected</span></h1>
+    <img src="{{img_uri}}">
+    <form action="{{ url_for('upload_passport') }}" enctype="multipart/form-data" method="POST">
+        <div class="form-group">
+            <h5><span class="badge badge-secondary">MRZ Text</span></h5>
+            <textarea name="mrz-text" class="form-control" id="mrz-textarea" rows="3" cols="300">{{ mrz_text }}</textarea> 
+        </div>
+        <button name="submit-button" value="mrz-text" type="submit" class="btn btn-primary mb-2">Submit MRZ</button>
+    </form>
+    {% elif success_status == -1 %}
+        <h1><span class="badge badge-danger">MRZ Not Found. Please Try Again with Another Image.</span></h1>
+    {% endif %}
+
 {% endblock content %}
