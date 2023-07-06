@@ -7,9 +7,6 @@ import sys
 import cv2
 import os
 
-# Uncomment for jicky to make tesseract work
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
-
 #Rescales image, video, and live video
 def rescaleFrame(frame, scale=0.75):
     height = int (frame.shape[0] * scale) #scales height
@@ -114,10 +111,17 @@ def getMRZCoords(image):
 def getMRZText(mrz):
 	# OCR the MRZ region of interest using Tesseract, removing any
 	# occurrences of spaces
-	mrzText = pytesseract.image_to_string(mrz)
+	tessdata_dir_config = r'--tessdata-dir "C:/Program Files/Tesseract-OCR/tessdata"'
+	mrzText = pytesseract.image_to_string(mrz,lang='mrz',config=tessdata_dir_config)
 	mrzText = mrzText.replace(" ", "")
 	return mrzText
 
+def getMRZImage(img):
+	mrz_coords = getMRZCoords(img)
+	if (mrz_coords == None): return None
+	(x,y,w,h) = mrz_coords
+	mrz = img[y:y + h, x:x + w]
+	return mrz
 
 def getAllScans(directory):
 
@@ -153,4 +157,3 @@ def showScans(scans):
 def drawMRZRectangle(image):
 	x,y,w,h = getMRZCoords(image)
 	return cv2.rectangle(image, (x,y),(x+w, y+h),(0,255,0),2)
-
