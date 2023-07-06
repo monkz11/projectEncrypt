@@ -3,7 +3,7 @@ from werkzeug.utils import secure_filename
 import cv2
 import os
 from encrypt import app
-from encrypt.passport_scan import drawMRZRectangle, getMRZCoords, getMRZText
+from encrypt.passport_scan import draw_mrz_rectangle, get_mrz_coords, get_mrz_text, scale_passport
 import numpy as np
 import io
 from PIL import Image
@@ -35,9 +35,10 @@ def upload_passport():
             # Convert to numpy array, read to cv2, and find mrz
             img = np.asarray(bytearray(file_content), dtype="uint8")
             img = cv2.imdecode(img, cv2.IMREAD_COLOR)
+            img = scale_passport(img)
             # Get coords for mrz. If it fails, return type is None
             try:
-                x,y,w,h = getMRZCoords(img)
+                x,y,w,h = get_mrz_coords(img)
             except:
                 success_status = -1
                 return render_template('upload.html', title = "Upload", success_status = success_status)
@@ -45,7 +46,7 @@ def upload_passport():
             # If no failure, display the image
             scan = cv2.rectangle(img, (x,y),(x+w, y+h),(0,255,0),2)
             mrz = img[y:y + h, x:x + w]
-            mrz_text = getMRZText(mrz)
+            mrz_text = get_mrz_text(mrz)
             # Need to swap to RGB since cv2 uses BGR instead. If this is deleted, image colours r fucked
             scan = cv2.cvtColor(scan, cv2.COLOR_BGR2RGB)
             # Found on stackoverflow to display image without saving
