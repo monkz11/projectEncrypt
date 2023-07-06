@@ -1,4 +1,4 @@
-# projectEncrypt
+# projectEncrypt 🛂:
 This project provides a safe way to create a verified virtual identity without storing any user information. 
 
 The project uses [OpenCV](https://link-url-here.org](https://pypi.org/project/opencv-python/)https://pypi.org/project/opencv-python/) for computer vision to detect
