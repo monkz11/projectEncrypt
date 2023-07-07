@@ -1,7 +1,6 @@
 from flask import render_template, request
 from werkzeug.utils import secure_filename
 import cv2
-import os
 from encrypt import app
 from encrypt.passport_scan import draw_mrz_rectangle, get_mrz_coords, get_mrz_text, scale_passport
 import numpy as np

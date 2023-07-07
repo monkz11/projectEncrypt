@@ -11,6 +11,8 @@
     <!-- Links to main.css stylesheet -->
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}"/>
 
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='Images/logo.ico') }}">
+    
     <!-- title can be passed as a parameter to the render_template function -->
     {% if title %}
         <title>projectEncrypt - {{ title }}</title>

@@ -1,15 +1,11 @@
 from imutils.contours import sort_contours
 import numpy as np
 import pytesseract
-import argparse
 import imutils
-import sys
 import cv2
 import os
 from mrz.checker.td3 import TD3CodeChecker
 
-ALPHA = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split())
-FILLER_CHAR = '<'
 
 #Rescales image, video, and live video
 def rescale_frame(frame, scale=0.75):
@@ -100,7 +96,6 @@ def get_mrz_coords(image):
 		return None
 	# pad the bounding box since we applied erosions and now need to
 	# re-grow it
-	i = 0
 	for matches in contourMatch:
 		(x, y, w, h) = matches
 		pX = int((x + w) * 0.03)
@@ -109,39 +104,59 @@ def get_mrz_coords(image):
 		(w, h) = (w + (pX * 2), h + (pY * 2))
 		# extract the padded MRZ from the image
 		mrz = image[y:y + h, x:x + w]
-		cv2.rectangle(image, (x,y),(x+w, y+h),(0,255,0),2)
-		cv2.imshow(f'{i}', image)
-		mrzWord = get_mrz_text(mrz)
-		if not mrzWord: continue
-		print('printing MRZ text')
-		print(mrzWord)
-		print(f'first letter is {mrzWord[0]}')
+		mrz_text = get_mrz_text(mrz)
+		if not mrz_text: continue
 		# if the first word in out extracted text is P then we know its the right one
-		if mrzWord[0] == 'P' and '<' in mrzWord:
-			# print('returning')
-			# print(is_valid_mrz_text(mrzWord))
+		# if mrz_text[0] == 'P' and '<' in mrz_text:
+		if is_valid_mrz_text(mrz_text):	
 			return (x,y,w,h)
-			# return mrzWord
-		i+=1
+
 	
 	return None
 
+def clean_mrz(mrz_text):
+	mrz_text = mrz_text.replace(" ", "")
+	lines = [line for line in mrz_text.split('\n') if len(line) == 44]
+	if (len(lines) != 2): return False
+	mrz = '\n'.join(lines)
+	return mrz
+
+def is_valid_mrz_text(mrz):
+	td3_check = TD3CodeChecker(mrz_code=mrz, check_expiry=False, compute_warnings=False)
+	if not td3_check:
+		print('false MRZ')
+		print("Falses:", td3_check.report.falses)
+		print("Warnings:", td3_check.report.warnings)
+
+	def print_txt(title, value):
+		print(title.ljust(20), value)
 
 
-# def is_valid_mrz_text(mrz_text):
-# 	lines = [line for line in mrz_text.split('\n') if len(line) == 44]
-# 	if (len(lines) != 2): return False
-# 	mrz = lines.join('\n')
-# 	checker = TD3CodeChecker(mrz_string=mrz, check_expiry=False)
-# 	return checker
+	fields = td3_check.fields()
+
+	print_txt("Document Type:", fields.document_type)
+	print_txt("Country:", fields.country)
+	print_txt("Surname:", fields.surname)
+	print_txt("Name:", fields.name)
+	print_txt("Doc. Number", fields.document_number)
+	print_txt("Doc. Number Hash:", fields.document_number_hash)
+	print_txt("Nationality:", fields.nationality)
+	print_txt("Birth Date:", fields.birth_date)
+	print_txt("Birth Date Hash:", fields.birth_date_hash)
+	print_txt("Sex:", fields.sex)
+	print_txt("Expiry Date:", fields.expiry_date)
+	print_txt("Expiry Date Hash:", fields.expiry_date_hash)
+	print_txt("Optional data:", fields.optional_data)
+	print_txt("Optional data hash:", fields.optional_data_hash)
+	print_txt("Final Hash:", fields.final_hash)
+	return td3_check
 
 def get_mrz_text(mrz):
 	# OCR the MRZ region of interest using Tesseract, removing any
 	# occurrences of spaces
 	tessdata_dir_config = r'--tessdata-dir "C:/Program Files/Tesseract-OCR/tessdata"'
-	mrzText = pytesseract.image_to_string(mrz,lang='mrz',config=tessdata_dir_config)
-	mrzText = mrzText.replace(" ", "")
-	return mrzText
+	mrz = pytesseract.image_to_string(mrz,lang='mrz',config=tessdata_dir_config)
+	return clean_mrz(mrz)
 
 def get_mrz_image(img):
 	mrz_coords = get_mrz_coords(img)
