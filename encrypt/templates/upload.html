@@ -16,17 +16,24 @@
         <button name="submit-button" value="img" type="submit" class="btn btn-primary mb-2">Upload</button>
     </form>
     {% if success_status == 0 %}
-    <h1><span class="badge badge badge-success">MRZ Detected</span></h1>
-    <img src="{{img_uri}}">
-    <form action="{{ url_for('upload_passport') }}" enctype="multipart/form-data" method="POST">
-        <div class="form-group">
-            <h5><span class="badge badge-secondary">MRZ Text</span></h5>
-            <textarea name="mrz-text" class="form-control" id="mrz-textarea" rows="3" cols="300">{{ mrz_text }}</textarea> 
+        <div class="alert alert-success" role="alert">
+            Success! A valid MRZ was detected!
         </div>
-        <button name="submit-button" value="mrz-text" type="submit" class="btn btn-primary mb-2">Submit MRZ</button>
-    </form>
-    {% elif success_status == -1 %}
-        <h1><span class="badge badge-danger">MRZ Not Found. Please Try Again with Another Image.</span></h1>
+        <img src="{{img_uri}}" class="card-img-top img-thumbnail" alt="scanned image of passport">
+        <div class="card">
+            <h5 class="card-header">MRZ Text</h5>
+            <div class="card-body">
+            <form action="{{ url_for('upload_passport') }}" enctype="multipart/form-data" method="POST">
+                <!-- <p name="mrz-text" class="form-control" class="card-text mrz-text"><pre>{{mrz_text}}</pre></p> -->
+                <textarea readonly name="mrz-text" class="card-text form-control mrz-text" rows="3" cols="300">{{ mrz_text }}</textarea> 
+                <a href="{{url_for('register', mrz=mrz_text)}}" class="btn btn-primary btn-lg active" role="button">Verify and Continue</a>
+            </form>
+            </div>
+        </div>
+        {% elif success_status == -1 %}
+        <div class="alert alert-warning" role="alert">
+            Sorry, an MRZ could not be detected. Please try again with another image.
+        </div>
     {% endif %}
 
 {% endblock content %}

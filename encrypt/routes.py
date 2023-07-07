@@ -1,8 +1,9 @@
 from flask import render_template, request
 from werkzeug.utils import secure_filename
 import cv2
-from encrypt import app
-from encrypt.passport_scan import draw_mrz_rectangle, get_mrz_coords, get_mrz_text, scale_passport
+from encrypt import app, User, db
+from encrypt.passport_scan import get_scan_uri, get_mrz_data
+from encrypt import database
 import numpy as np
 import io
 from PIL import Image
@@ -22,44 +23,48 @@ def home():
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_passport():
     if request.method == 'POST':
-        # Runs following branch if image is uploaded
-        if request.form.get('submit-button') == "img":
-            # passport_img is defined in the html file... check there for more
-            file = request.files.get('passport_img')
-            # If they submit with no file, just render normal page
-            if (not file):
-                return render_template('upload.html')
-            # Allows us to read image without saving it anywhere 
-            file_content = file.read()
-            # Convert to numpy array, read to cv2, and find mrz
-            img = np.asarray(bytearray(file_content), dtype="uint8")
-            img = cv2.imdecode(img, cv2.IMREAD_COLOR)
-            img = scale_passport(img)
-            # Get coords for mrz. If it fails, return type is None
-            try:
-                x,y,w,h = get_mrz_coords(img)
-            except:
-                success_status = -1
-                return render_template('upload.html', title = "Upload", success_status = success_status)
-            success_status = 0
-            # If no failure, display the image
-            scan = cv2.rectangle(img, (x,y),(x+w, y+h),(0,255,0),2)
-            mrz = img[y:y + h, x:x + w]
-            mrz_text = get_mrz_text(mrz)
-            # Need to swap to RGB since cv2 uses BGR instead. If this is deleted, image colours r fucked
-            scan = cv2.cvtColor(scan, cv2.COLOR_BGR2RGB)
-            # Found on stackoverflow to display image without saving
-            img = Image.fromarray(scan.astype("uint8"))
-            rawBytes = io.BytesIO()
-            img.save(rawBytes, "JPEG")
-            rawBytes.seek(0)
-            img_base64 = base64.b64encode(rawBytes.getvalue()).decode('ascii')
-            mime = "image/jpeg"
-            uri = f"data:{mime};base64,{img_base64}"
-            return render_template('upload.html', title = "Upload", img_uri=uri, mrz_text = mrz_text, success_status = success_status)
-        if request.form.get('submit-button') == "mrz-text":
-            text = request.form.get('mrz-text')
-            print(text)
-            # TODO: Encrypt MRZ and add to DB
-            return f"<h1>Your data has been submitted!</h1>"
+        success_status = 0
+        # passport_img is defined in the html file... check there for more
+        file = request.files.get('passport_img')
+        # If they submit with no file, just render normal page
+        if (not file):
+            return render_template('upload.html')
+        # Allows us to read image without saving it anywhere 
+        file_content = file.read()
+        # Convert to numpy array, read to cv2, and find mrz
+        img = np.asarray(bytearray(file_content), dtype="uint8")
+        img = cv2.imdecode(img, cv2.IMREAD_COLOR)
+
+        mrz_data = get_mrz_data(img) # returns dictionary w scanned image and text
+
+        # check is data was found
+        if (mrz_data is None): return render_template('upload.html', title = "Upload", success_status = -1)
+
+        scan = mrz_data['scan']
+        mrz_text = mrz_data['text']
+
+        # Found on stackoverflow to display image without saving
+        uri = get_scan_uri(scan)
+
+        return render_template('upload.html', title = "Upload", img_uri=uri, mrz_text = mrz_text, success_status = success_status)
     return render_template('upload.html')
+
+@app.route('/register/<mrz>', methods=['GET', 'POST'])
+def register(mrz):
+
+    if (not database.is_new_user(mrz)):
+        return render_template('register.html', mrz=mrz, is_new_user=False)
+
+    if request.method == 'POST':
+        email = request.form.get('user_email')
+        password = request.form.get('user_password')
+        mrz_hash = database.hash_mrz(mrz)
+        user = User(email=email, password=password, mrz_hash=mrz_hash)
+        db.session.add(user)
+        db.session.commit()
+        
+        for user in User.query.all():
+            print(user)
+        
+        return f'<h1>Account created</h1>'
+    return render_template('register.html', mrz=mrz, is_new_user=True)

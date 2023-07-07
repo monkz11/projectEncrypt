@@ -5,6 +5,9 @@ import imutils
 import cv2
 import os
 from mrz.checker.td3 import TD3CodeChecker
+from PIL import Image
+import base64
+import io
 
 
 #Rescales image, video, and live video
@@ -21,7 +24,12 @@ def scale_passport(img):
 	img = rescale_frame(img, scale)
 	return img
 
-def get_mrz_coords(image):
+def get_mrz_data(image):
+
+	print("\n\n ----------- GETTING MRZ -----------\n\n")
+
+	image = scale_passport(image)
+
 	# Opencv command converts image from its corrent format to grayscale(easier to read)
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	# finds the height and width of the image in (if I understand the documentation properly pixels e.g. example H=2956, W=2006)
@@ -36,7 +44,7 @@ def get_mrz_coords(image):
 	gray = cv2.GaussianBlur(gray, (3, 3), 0)
 	# blackhat operation finds dark regions on a light background
 	blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKernel)
-	cv2.imshow("Blackhat", blackhat)
+	# cv2.imshow("Blackhat", blackhat)
 
 	# Ref: https://pyimagesearch.com/2021/05/12/image-gradients-with-opencv-sobel-and-scharr/
 	# compute the Scharr gradient of the blackhat image and scale the
@@ -93,7 +101,10 @@ def get_mrz_coords(image):
 
 	# if the MRZ was not found, exit the script
 	if contourMatch == []:
+		print('no matches')
 		return None
+	print('matches found')
+	print(f'len matches: {len(contourMatch)}')
 	# pad the bounding box since we applied erosions and now need to
 	# re-grow it
 	for matches in contourMatch:
@@ -109,8 +120,12 @@ def get_mrz_coords(image):
 		# if the first word in out extracted text is P then we know its the right one
 		# if mrz_text[0] == 'P' and '<' in mrz_text:
 		if is_valid_mrz_text(mrz_text):	
-			return (x,y,w,h)
-
+			data = {
+				'scan' : cv2.rectangle(image, (x,y),(x+w, y+h),(0,255,0),2),
+				'text': mrz_text
+			}
+			print(mrz_text)
+			return data
 	
 	return None
 
@@ -128,80 +143,50 @@ def is_valid_mrz_text(mrz):
 		print("Falses:", td3_check.report.falses)
 		print("Warnings:", td3_check.report.warnings)
 
-	def print_txt(title, value):
-		print(title.ljust(20), value)
+	# def print_txt(title, value):
+	# 	print(title.ljust(20), value)
 
+	# print('\n MRZ DETECTED \n')
+	# print(mrz + '\n')
+	# fields = td3_check.fields()
 
-	fields = td3_check.fields()
-
-	print_txt("Document Type:", fields.document_type)
-	print_txt("Country:", fields.country)
-	print_txt("Surname:", fields.surname)
-	print_txt("Name:", fields.name)
-	print_txt("Doc. Number", fields.document_number)
-	print_txt("Doc. Number Hash:", fields.document_number_hash)
-	print_txt("Nationality:", fields.nationality)
-	print_txt("Birth Date:", fields.birth_date)
-	print_txt("Birth Date Hash:", fields.birth_date_hash)
-	print_txt("Sex:", fields.sex)
-	print_txt("Expiry Date:", fields.expiry_date)
-	print_txt("Expiry Date Hash:", fields.expiry_date_hash)
-	print_txt("Optional data:", fields.optional_data)
-	print_txt("Optional data hash:", fields.optional_data_hash)
-	print_txt("Final Hash:", fields.final_hash)
+	# print_txt("Document Type:", fields.document_type)
+	# print_txt("Country:", fields.country)
+	# print_txt("Surname:", fields.surname)
+	# print_txt("Name:", fields.name)
+	# print_txt("Doc. Number", fields.document_number)
+	# print_txt("Doc. Number Hash:", fields.document_number_hash)
+	# print_txt("Nationality:", fields.nationality)
+	# print_txt("Birth Date:", fields.birth_date)
+	# print_txt("Birth Date Hash:", fields.birth_date_hash)
+	# print_txt("Sex:", fields.sex)
+	# print_txt("Expiry Date:", fields.expiry_date)
+	# print_txt("Expiry Date Hash:", fields.expiry_date_hash)
+	# print_txt("Optional data:", fields.optional_data)
+	# print_txt("Optional data hash:", fields.optional_data_hash)
+	# print_txt("Final Hash:", fields.final_hash)
 	return td3_check
 
 def get_mrz_text(mrz):
 	# OCR the MRZ region of interest using Tesseract, removing any
 	# occurrences of spaces
-	tessdata_dir_config = r'--tessdata-dir "C:/Program Files/Tesseract-OCR/tessdata"'
+	tessdata_dir_config = r'--tessdata-dir "encrypt/dataset"'
 	mrz = pytesseract.image_to_string(mrz,lang='mrz',config=tessdata_dir_config)
-	return clean_mrz(mrz)
-
-def get_mrz_image(img):
-	mrz_coords = get_mrz_coords(img)
-	if (mrz_coords == None): return None
-	(x,y,w,h) = mrz_coords
-	mrz = img[y:y + h, x:x + w]
+	mrz = clean_mrz(mrz)
 	return mrz
 
-def get_all_scans(directory):
-
-	scans = []
-	for filename in os.listdir(directory):
-		path = os.path.join(directory, filename)
-		image = cv2.imread(path)
-		mrz_coords = get_mrz_coords(image)
-		if (mrz_coords == None): continue
-		(x,y,w,h) = mrz_coords
-		mrz = image[y:y + h, x:x + w]
-		mrz_text = get_mrz_text(mrz)
-		#print(mrz)
-		#mrzText = get_mrz_text(mrz)
-		scans.append(mrz_text)
-
-	return scans
-
-
-def show_scans(scans):
-	print("------------ Beginning Scan")
-	scanNum = 1
-	for mrz in scans:
-		print(f"------------ Showing scan #{str(scanNum)}")
-		print(mrz)
-		#cv2.imshow(mrz, scans[mrz])
-		input("------------ Press any key to see next scan")
-		# cv2.waitKey(0)
-		scanNum += 1
-
-	print("------------ All scans have been displayed")
-
-def draw_mrz_rectangle(image):
-	coords = get_mrz_coords(image)
-	if not coords:
-		return None
-	x,y,w,h = get_mrz_coords(image)
-	return cv2.rectangle(image, (x,y),(x+w, y+h),(0,255,0),2)
+def get_scan_uri(image):
+	# Need to swap to RGB since cv2 uses BGR instead. If this is deleted, image colours r fucked
+	scan = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	# Found on stackoverflow to display image without saving
+	img = Image.fromarray(scan.astype("uint8"))
+	rawBytes = io.BytesIO()
+	img.save(rawBytes, "JPEG")
+	rawBytes.seek(0)
+	img_base64 = base64.b64encode(rawBytes.getvalue()).decode('ascii')
+	mime = "image/jpeg"
+	uri = f"data:{mime};base64,{img_base64}"
+	return uri
 
 # img = cv2.imread('encrypt/static/Passports/china.jpg')
 # img = draw_mrz_rectangle(img)
