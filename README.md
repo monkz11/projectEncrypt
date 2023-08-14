@@ -1,7 +1,7 @@
 # projectEncrypt 🛂
 projectEncrypt is an open source identity verification app that allows users to prove their identitiy using a government issued ID. IDs are used for verification, but none of the information is stored. The only information stored for a user is their username, password, and email/phone number. The project was created to combat bot accounts by providing a safe way to prove human identitiy.
 
-The project uses [OpenCV](https://link-url-here.org](https://pypi.org/project/opencv-python/)https://pypi.org/project/opencv-python/) for computer vision to detect the [MRZ](https://en.wikipedia.org/wiki/Machine-readable_passport) (Machine Readable Zone) on an ID document. 
+The project uses [OpenCV](https://pypi.org/project/opencv-python/) for computer vision to detect the [MRZ](https://en.wikipedia.org/wiki/Machine-readable_passport) (Machine Readable Zone) on an ID document. 
 
 Images undergo various stages of pre-processing to detect the location of the MRZ:
 
